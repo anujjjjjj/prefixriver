@@ -49,8 +49,8 @@ describe("SAMPLES", () => {
     expect(analysis.turns[10].gapSeconds).toBeGreaterThan(420);
     for (const i of [5, 7, 10]) expect(analysis.turns[i].wastedTokens).toBeGreaterThan(1000);
     const systemTokens = parsed.requests[0].segments.filter((s) => s.kind === "system").reduce((a, s) => a + s.tokens, 0);
-    expect(systemTokens).toBeGreaterThan(3000);
-    expect(systemTokens).toBeLessThan(6500);
+    expect(systemTokens).toBeGreaterThan(12000);
+    expect(systemTokens).toBeLessThan(20000);
     const gaps = analysis.turns.slice(1).map((t) => t.gapSeconds ?? 0);
     expect(gaps.filter((g) => g < 20 || g > 60)).toEqual([gaps[9]]);
   });

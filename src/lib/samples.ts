@@ -287,7 +287,7 @@ function claudeCodeSample(): SampleSession {
   const gaps = [34, 41, 27, 52, 38, 45, 29, 48, 36, 452, 31];
   const times = timeline(gaps);
   const steps = makeSteps(11, 12, ["Read", "Grep", "Edit", "Bash", "Glob"]);
-  const mainPrompt = buildSystemPrompt(101, 4900, "Additional working agreements");
+  const mainPrompt = buildSystemPrompt(101, 17000, "Additional working agreements");
   const task = "The retry logic in src/net/client.ts gives up after the first 503. Find out why, fix it, and make sure the tests in test/net still pass.";
 
   const turns: BuiltTurn[] = times.map((ts, t) => {
