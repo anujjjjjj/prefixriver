@@ -278,7 +278,7 @@ export default function River({
         const p = progressOf(r);
         if (p <= 0) continue;
         const revealX = b.x0 + (b.x1 - b.x0 + 24) * p;
-        const cachedEnd = Math.min(b.cachedX, b.crackX ?? b.x1, revealX);
+        const cachedEnd = Math.min(b.hotX ?? b.cachedX, revealX);
 
         if (cool && cachedEnd - b.x0 > 8 && b.h >= 3) {
           const sx = ((t * 170 + r * 46) % (W + SW)) - SW;
@@ -406,7 +406,8 @@ export default function River({
     if (row < 0 || row >= Math.min(revealedRef.current, L.bands.length)) return null;
     const b = L.bands[row];
     if (x < b.x0 - 6 || x > b.x1 + 10) return null;
-    if (b.crackX !== null && x >= b.crackX - 10) return { row, kind: "break" };
+    // On a break, the whole re-billed span (from the end of the cache hit) explains the break.
+    if (b.hotX !== null && x >= b.hotX - 10) return { row, kind: "break" };
     return { row, kind: "band" };
   }, []);
 

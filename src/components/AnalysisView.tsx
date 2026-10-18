@@ -27,10 +27,9 @@ interface AnalysisViewProps {
   analysis: SessionAnalysis;
   name: string;
   title: string;
-  hasUsage: boolean;
 }
 
-export default function AnalysisView({ analysis, name, title, hasUsage }: AnalysisViewProps) {
+export default function AnalysisView({ analysis, name, title }: AnalysisViewProps) {
   const reducedMotion = useReducedMotion();
   const isMobile = useIsMobile();
   const n = analysis.turns.length;
@@ -73,12 +72,13 @@ export default function AnalysisView({ analysis, name, title, hasUsage }: Analys
   const selectRow = useCallback(
     (row: number | null) => {
       setFocusedRow(row);
+      if (row !== null && analysis.turns[row]?.isBreak) setPickedRow(row);
       if (row !== null) {
         setPlaying(false);
         setCurrent((c) => Math.max(c, row + 1));
       }
     },
-    [],
+    [analysis],
   );
 
   useEffect(() => {
@@ -104,6 +104,19 @@ export default function AnalysisView({ analysis, name, title, hasUsage }: Analys
 
   const breaks = useMemo(() => analysis.turns.map((turn, row) => ({ turn, row })).filter((b) => b.turn.isBreak), [analysis]);
   const focusedTurn = focusedRow !== null ? analysis.turns[focusedRow] : null;
+
+  // Inline detail under the break list: the last break picked, defaulting to the costliest one.
+  const costliestRow = useMemo(() => {
+    let best: { row: number; usd: number } | null = null;
+    for (const b of breaks) {
+      const usd = wastedByIndex.get(b.turn.index) ?? 0;
+      if (!best || usd > best.usd) best = { row: b.row, usd };
+    }
+    return best?.row ?? null;
+  }, [breaks, wastedByIndex]);
+  const [pickedRow, setPickedRow] = useState<number | null>(null);
+  const detailRow = pickedRow ?? costliestRow;
+  const detailTurn = detailRow !== null ? analysis.turns[detailRow] : null;
 
   return (
     <div className="space-y-6">
@@ -162,10 +175,28 @@ export default function AnalysisView({ analysis, name, title, hasUsage }: Analys
           <h2 id="breaks-heading" className="mb-4 mt-1 text-2xl font-semibold tracking-[-0.03em] text-ink">
             Cache breaks
           </h2>
-          <BreakList breaks={breaks} wastedByIndex={wastedByIndex} focusedRow={focusedRow} onSelect={selectRow} />
+          <BreakList
+            breaks={breaks}
+            wastedByIndex={wastedByIndex}
+            focusedRow={isMobile ? focusedRow : detailRow}
+            onSelect={selectRow}
+          />
+          {!isMobile && detailTurn && detailRow !== null && (
+            <div
+              data-testid="break-detail"
+              className="mt-4 rounded-xl border border-ember/20 bg-black/20 p-4"
+            >
+              <BreakDetail
+                turn={detailTurn}
+                row={detailRow}
+                wastedUsd={wastedByIndex.get(detailTurn.index) ?? 0}
+                testIdPrefix="detail-"
+              />
+            </div>
+          )}
           <p className="mt-4 text-xs leading-relaxed text-ink-faint">
             A break is any turn where the previous prompt prefix stopped matching, so tokens that should have been cheap cache reads were billed again.
-            Select one to see the diff and the fix.
+            {isMobile ? " Select one to see the diff and the fix." : " Select one to see its diff and fix, and to find it in the river."}
           </p>
         </section>
         <CostPanel
@@ -173,7 +204,6 @@ export default function AnalysisView({ analysis, name, title, hasUsage }: Analys
           cost={cost}
           pricingId={pricing.id}
           onPricingChange={setPricingId}
-          hasUsage={hasUsage}
           reducedMotion={reducedMotion}
         />
       </div>
@@ -185,7 +215,7 @@ export default function AnalysisView({ analysis, name, title, hasUsage }: Analys
             role="dialog"
             aria-modal="true"
             aria-label={`Cache break details for turn ${focusedRow + 1}`}
-            className="animate-sheet max-h-[80vh] w-full overflow-y-auto rounded-t-2xl border-t hairline bg-[#0a0d16] p-5 pb-8 shadow-2xl"
+            className="animate-sheet max-h-[80vh] w-full min-w-0 overflow-y-auto overscroll-contain rounded-t-2xl border-t hairline bg-[#0a0d16] p-5 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" aria-hidden />
@@ -212,6 +242,7 @@ function Legend() {
       {item("bg-gradient-to-r from-glacier to-glacier-2 shadow-[0_0_10px_rgba(94,234,212,0.6)]", "cached")}
       {item("bg-slate-300/60", "new")}
       {item("bg-gradient-to-r from-ember to-ember-2 shadow-[0_0_10px_rgba(244,63,94,0.6)]", "re-billed")}
+      {item("bg-[repeating-linear-gradient(135deg,rgba(251,146,60,0.7)_0_2px,rgba(251,146,60,0.3)_2px_4px)]", "re-billed, unchanged")}
     </div>
   );
 }

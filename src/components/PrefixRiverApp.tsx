@@ -19,7 +19,6 @@ interface Loaded {
   analysis: SessionAnalysis;
   name: string;
   title: string;
-  hasUsage: boolean;
 }
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -67,7 +66,6 @@ export default function PrefixRiverApp() {
             analysis,
             name: opts.sampleId ?? source.replace(/\.[a-z0-9]+$/i, ""),
             title: opts.title ?? source,
-            hasUsage: parsed.requests.some((r) => r.usage && (r.usage.inputTokens !== undefined || r.usage.cacheReadTokens !== undefined)),
           };
           nextSummary = {
             format: FORMAT_LABEL[parsed.format] ?? parsed.format,
@@ -107,7 +105,7 @@ export default function PrefixRiverApp() {
     [analyze],
   );
 
-  // After a sample loads from the hero, glide down to the river.
+  // After a sample loads (hero button or sample chip), glide down to the river.
   useEffect(() => {
     if (!loaded || !pendingScroll.current) return;
     pendingScroll.current = false;
@@ -119,7 +117,8 @@ export default function PrefixRiverApp() {
   }, [loaded]);
 
   const onLoadCapture = () => {
-    document.getElementById("analyze")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById("analyze")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
     fileInputRef.current?.click();
   };
 
@@ -134,12 +133,12 @@ export default function PrefixRiverApp() {
           error={error}
           summary={summary}
           onAnalyze={(text, source) => analyze(text, source)}
-          onSample={(id) => loadSample(id)}
+          onSample={(id) => loadSample(id, true)}
           fileInputRef={fileInputRef}
         />
         <div id="river-section" className="scroll-mt-4">
           {loaded ? (
-            <AnalysisView key={loaded.key} analysis={loaded.analysis} name={loaded.name} title={loaded.title} hasUsage={loaded.hasUsage} />
+            <AnalysisView key={loaded.key} analysis={loaded.analysis} name={loaded.name} title={loaded.title} />
           ) : (
             <EmptyState />
           )}

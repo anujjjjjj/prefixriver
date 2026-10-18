@@ -10,7 +10,20 @@ function excerpt(s: string, max = 220): string {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
-export function BreakDetail({ turn, row, wastedUsd }: { turn: TurnAnalysis; row: number; wastedUsd: number }) {
+export function BreakDetail({
+  turn,
+  row,
+  wastedUsd,
+  testIdPrefix = "",
+}: {
+  turn: TurnAnalysis;
+  row: number;
+  wastedUsd: number;
+  /** Prefix for the diff testids, so a second copy on the page doesn't collide with the tooltip. */
+  testIdPrefix?: string;
+}) {
+  // Ignore rounding-level gaps (a handful of tokens) between the cache hit end and the divergence point.
+  const rebilledShared = turn.breakTokenOffset - turn.cachedTokens >= 32;
   const culprits = turn.culprits.filter((c) => c !== "first_request");
   const hint = turn.fixHint ?? (culprits[0] ? FIX_HINTS[culprits[0]] : undefined);
   return (
@@ -39,18 +52,27 @@ export function BreakDetail({ turn, row, wastedUsd }: { turn: TurnAnalysis; row:
           </div>
           <p className="text-[13px] leading-snug text-ink-dim">{turn.diff.summary}</p>
           <div className="overflow-hidden rounded-lg border hairline bg-black/40 font-mono text-[11.5px] leading-relaxed">
-            <div data-testid="diff-before" className="flex gap-2 bg-rose-500/10 px-2.5 py-1.5 text-rose-200">
+            <div data-testid={`${testIdPrefix}diff-before`} className="flex gap-2 bg-rose-500/10 px-2.5 py-1.5 text-rose-200">
               <span aria-hidden className="select-none text-rose-400">−</span>
               <span className="sr-only">Before:</span>
               <span className="break-all">{turn.diff.before ? excerpt(turn.diff.before) : <em className="text-rose-300/60">(nothing)</em>}</span>
             </div>
-            <div data-testid="diff-after" className="flex gap-2 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-200">
+            <div data-testid={`${testIdPrefix}diff-after`} className="flex gap-2 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-200">
               <span aria-hidden className="select-none text-emerald-400">+</span>
               <span className="sr-only">After:</span>
               <span className="break-all">{turn.diff.after ? excerpt(turn.diff.after) : <em className="text-emerald-300/60">(nothing)</em>}</span>
             </div>
           </div>
         </div>
+      )}
+      {rebilledShared && (
+        <p className="flex gap-2 text-[12.5px] leading-snug text-orange-100/90">
+          <span aria-hidden className="mt-1 h-2.5 w-3.5 shrink-0 rounded-sm bg-[repeating-linear-gradient(135deg,rgba(251,146,60,0.75)_0_2px,rgba(251,146,60,0.3)_2px_4px)]" />
+          <span>
+            Shared bytes before the change were re-billed too: the cache breakpoint sat after it.{" "}
+            <span className="font-mono text-[11px] text-ink-faint tnum">({fmtTokens(turn.breakTokenOffset - turn.cachedTokens)} identical tok)</span>
+          </span>
+        </p>
       )}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-lg border hairline bg-white/[0.02] px-3 py-2">

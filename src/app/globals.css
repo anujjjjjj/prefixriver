@@ -41,6 +41,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  /* Guard against any stray wide child creating sideways page scroll on phones. */
+  overflow-x: clip;
 }
 
 /* Film grain + vignette, fixed behind content. */

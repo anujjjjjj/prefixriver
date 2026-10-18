@@ -18,8 +18,13 @@ export interface BandLayout {
   x1: number;
   /** End of the cache-served region. */
   cachedX: number;
-  /** Crack position (break turns only). */
+  /** Crack position (break turns only): where the prompt actually diverged. */
   crackX: number | null;
+  /**
+   * Start of the re-billed region (break turns only). Usually equals cachedX: tokens between
+   * hotX and crackX are byte-identical to the previous turn but missed the cache anyway.
+   */
+  hotX: number | null;
   /** End of the prefix shared with the previous turn (for guides). */
   sharedX: number;
   blocks: BlockLayout[];
@@ -144,10 +149,11 @@ export function computeLayout(analysis: SessionAnalysis, o: LayoutOptions): Rive
         }
       }
     }
+    const hotX = crackX === null ? null : Math.min(cachedX, crackX);
     const sharedX = X(Math.min(turn.sharedPrefixTokens, total));
     const kinds = turn.culprits.filter((k) => k !== "first_request");
     const chip = turn.isBreak && kinds.length ? CULPRIT_SHORT[kinds[0]] + (kinds.length > 1 ? ` +${kinds.length - 1}` : "") : null;
-    return { row, turn, y, h: o.bandH, x0: o.gutter, x1, cachedX, crackX, sharedX, blocks, crack, branch, chip };
+    return { row, turn, y, h: o.bandH, x0: o.gutter, x1, cachedX, crackX, hotX, sharedX, blocks, crack, branch, chip };
   });
 
   const step = niceStep(maxTokens, usable);
@@ -216,7 +222,8 @@ export function drawBand(ctx: CanvasRenderingContext2D, b: BandLayout, o: Static
   const w = x1 - x0;
   if (w <= 0) return;
   const r = Math.min(6, h / 2);
-  const hot = b.crackX;
+  const crack = b.crackX;
+  const hot = b.hotX;
 
   ctx.save();
   // Glow passes (outside the clip so they bloom).
@@ -226,7 +233,7 @@ export function drawBand(ctx: CanvasRenderingContext2D, b: BandLayout, o: Static
       ctx.shadowColor = "rgba(56, 189, 248, 0.75)";
       ctx.shadowBlur = Math.min(18, h * 0.9 + 4);
       ctx.fillStyle = "rgba(94, 234, 212, 0.18)";
-      roundRectPath(ctx, x0, y, Math.min(b.cachedX, hot ?? x1) - x0, h, r);
+      roundRectPath(ctx, x0, y, (hot ?? b.cachedX) - x0, h, r);
       ctx.fill();
     }
     if (hot !== null && x1 - hot > 1) {
@@ -249,16 +256,15 @@ export function drawBand(ctx: CanvasRenderingContext2D, b: BandLayout, o: Static
     ctx.fillRect(blk.x0, y, Math.max(0.5, blk.x1 - blk.x0), h);
   }
 
-  // Neutral (newly processed) tokens.
-  const neutralStart = b.cachedX;
-  const neutralEnd = hot ?? x1;
-  if (neutralEnd - neutralStart > 0.5) {
+  // Neutral (newly processed) tokens — only on turns that didn't break. On a break everything
+  // past the cache hit was paid for again, so it runs hot instead.
+  if (hot === null && x1 - b.cachedX > 0.5) {
     ctx.fillStyle = "rgba(226, 232, 240, 0.42)";
-    ctx.fillRect(neutralStart, y, neutralEnd - neutralStart, h);
+    ctx.fillRect(b.cachedX, y, x1 - b.cachedX, h);
   }
 
   // Cached prefix.
-  const cachedEnd = Math.min(b.cachedX, hot ?? x1);
+  const cachedEnd = hot ?? b.cachedX;
   if (cachedEnd - x0 > 0.5) {
     const g = ctx.createLinearGradient(x0, 0, Math.max(x0 + 1, cachedEnd), 0);
     g.addColorStop(0, "rgba(94, 234, 212, 0.85)");
@@ -281,13 +287,38 @@ export function drawBand(ctx: CanvasRenderingContext2D, b: BandLayout, o: Static
     ctx.fillRect(x0, y, cachedEnd - x0, h);
   }
 
-  // Hot region.
-  if (hot !== null && x1 - hot > 0.5) {
-    const g = ctx.createLinearGradient(hot, 0, x1, 0);
+  // Re-billed but identical: bytes before the divergence that still missed the cache
+  // (the breakpoint sat after the change). Dimmer, striped hot.
+  if (hot !== null && crack !== null && crack - hot > 0.5) {
+    ctx.fillStyle = "rgba(251, 146, 60, 0.5)";
+    ctx.fillRect(hot, y, crack - hot, h);
+    if (h >= 3) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(hot, y, crack - hot, h);
+      ctx.clip();
+      ctx.strokeStyle = "rgba(5, 7, 13, 0.35)";
+      ctx.lineWidth = Math.max(1, Math.min(2.5, h / 6));
+      const pitch = Math.max(4, Math.min(8, h / 2));
+      ctx.beginPath();
+      for (let sx = hot - h; sx < crack + h; sx += pitch) {
+        ctx.moveTo(sx, y + h);
+        ctx.lineTo(sx + h, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Hot region past the divergence.
+  if (crack !== null && x1 - crack > 0.5) {
+    const g = ctx.createLinearGradient(crack, 0, x1, 0);
     g.addColorStop(0, "rgba(251, 146, 60, 0.95)");
     g.addColorStop(1, "rgba(244, 63, 94, 0.95)");
     ctx.fillStyle = g;
-    ctx.fillRect(hot, y, x1 - hot, h);
+    ctx.fillRect(crack, y, x1 - crack, h);
+  }
+  if (hot !== null && x1 - hot > 0.5) {
     const s = ctx.createLinearGradient(0, y, 0, y + h);
     s.addColorStop(0, "rgba(255,237,213,0.3)");
     s.addColorStop(0.55, "rgba(255,255,255,0)");

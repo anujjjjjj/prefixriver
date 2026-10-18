@@ -12,7 +12,6 @@ interface CostPanelProps {
   cost: CostBreakdown;
   pricingId: string;
   onPricingChange: (id: string) => void;
-  hasUsage: boolean;
   reducedMotion: boolean;
 }
 
@@ -63,7 +62,7 @@ function Stat({ label, value, tone, testId, sub }: { label: string; value: numbe
   );
 }
 
-export default function CostPanel({ analysis, cost, pricingId, onPricingChange, hasUsage, reducedMotion }: CostPanelProps) {
+export default function CostPanel({ analysis, cost, pricingId, onPricingChange, reducedMotion }: CostPanelProps) {
   const groups = useMemo(() => {
     const m = new Map<Provider, typeof PRICING>();
     for (const p of PRICING) m.set(p.provider, [...(m.get(p.provider) ?? []), p]);
@@ -161,7 +160,10 @@ export default function CostPanel({ analysis, cost, pricingId, onPricingChange, 
           </div>
           <div>
             <dt className="text-ink-faint">Cache write</dt>
-            <dd className="text-ink">${p.cacheWrite5m}/1M</dd>
+            <dd className="text-ink">
+              ${p.cacheWrite5m}/1M
+              {p.provider === "openai" && p.cacheWrite5m !== p.input && <span className="text-ink-faint"> · not applied</span>}
+            </dd>
           </div>
           <div>
             <dt className="text-ink-faint">Cache read</dt>
@@ -181,10 +183,14 @@ export default function CostPanel({ analysis, cost, pricingId, onPricingChange, 
           ))}
         </p>
         <p className="mt-2 text-ink-faint">
-          {hasUsage
-            ? "Token counts use provider-reported usage where the capture includes it; other values are estimated at ~4 bytes/token."
-            : "Token counts are estimated at ~4 bytes/token — the capture doesn't include provider usage."}{" "}
-          Output tokens are not included.
+          Token counts are estimated from request bytes (~4 bytes/token). Provider usage in a capture is not used for these estimates. Output
+          tokens are not included.
+          {p.provider === "openai" && (
+            <>
+              {" "}
+              Cache writes are priced at the input rate; the 1.25× write surcharge on GPT-5.6+ explicit breakpoints is not modeled.
+            </>
+          )}
         </p>
       </div>
     </section>
